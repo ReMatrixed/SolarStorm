@@ -1,13 +1,19 @@
 # === Встроенные библиотеки
-# Библиотека для парсинга аргументов (API-ключ, например)
+# Библиотека для парсинга аргументов (путь до файла настроек, например)
 import argparse
+
 # Прочие библиотеки
-import logging
+import json
+
+# Подключение внутренних модулей
+from core.db import prepare_database
 
 # === Внешние библиотеки
 # Библиотека для взаимодействия с Telegram API
-import aiogram
+from aiogram import Dispatcher
 
-# Настройка логгера
-log = logging.getLogger(__name__)
-logging.basicConfig(filename = "starstorm.log", level = logging.DEBUG)
+# Инициализация т.н. Диспетчера (корневого Роутера) для работы с ботом
+dp = Dispatcher()
+
+if __name__ == "main":
+    prepare_database()

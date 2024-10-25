@@ -1,5 +1,33 @@
-# Игнорирование некоторых типов файлов, не относящихся к исходному коду
-*.log
+# Скомпилированный код
+__pycache__/
+*.py[cod]
 
-# Игнорирование папки переменного окружения venv
+# Расширения C
+*.so
+
+# Файлы, требуемые для компиляции и дистрибуции
+bin/
+build/
+develop-eggs/
+dist/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Файлы журнала
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Файлы баз данных
+*.db
+
+# Переменные окружения
+.env
 .venv

@@ -7,6 +7,9 @@ from dataclasses import dataclass
 # Подключение библиотеки логгирования
 import logging
 
+# Подключение других библиотек
+import datetime
+
 # Информация об одном пользователе
 @dataclass
 class UserData:
@@ -22,18 +25,14 @@ class DatabaseDispatcher:
     logger: logging.Logger
     is_connected = False
 
-    def __init__(self, host: str, port: int, username: str, password: str, dbname: str, logger: logging.Logger):
+    async def setup(self, host: str, port: int, username: str, password: str, dbname: str, logger: logging.Logger):
         self.logger = logger
         self.logger.info("Подключение к базе данных...")
-        self.connection = psycopg.connect(
+        self.connection = await psycopg.AsyncConnection.connect(
             f"hostaddr={host} port={port} dbname={dbname} user={username} password={password}"
         )
         self.logger.info("База данных подключена.")
         self.is_connected = True
-
-    def __del__(self):
-        if(self.is_connected):
-            self.close_database()
 
     # Структура базы данных пользователей:
     # ОБЯЗАТЕЛЬНЫЕ ДАННЫЕ
@@ -44,7 +43,7 @@ class DatabaseDispatcher:
     # ОПЦИОНАЛЬНЫЕ ДАННЫЕ
     # 5-й столбец (realname) - фамилия и имя пользователя, могут быть получены от пользователя, если он укажет их
     # 6-й столбец (form) - номер класса, в котором обучается пользователь (целое число от 1 до 11)
-    # 7-й столбец (school) - название школы, в которой обучается пользователь
+    # 7-й столбец (city) - название города, в котором обучается/проживает пользователь
 
     # Структура базы данных участников чат-центра:
     # ВСЕ ДАННЫЕ ОБЯЗАТЕЛЬНЫ
@@ -54,11 +53,11 @@ class DatabaseDispatcher:
     # 4-й столбец (images) - кол-во изображений, отправленных участниками
     # 5-й столбец (videos) - кол-во видеоматериалов, отправленных участниками
     # 6-й столбец (status) - статус участника (AVAILABLE - доступен, WORKING - работает над запросом, PAUSED - временно недоступен, FIRED - покинул чат-центр)
-    def prepare_database(self):
-        with self.connection.cursor() as cur: 
+    async def prepare_database(self):
+        async with self.connection.cursor() as cur: 
             self.logger.info("Подготовка базы данных...")
             self.logger.info("Подготовка таблицы users...")
-            cur.execute(
+            await cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
@@ -67,12 +66,12 @@ class DatabaseDispatcher:
                     rating SMALLINT NOT NULL,
                     realname TEXT NOT NULL,
                     form SMALLINT NOT NULL,
-                    school TEXT NOT NULL
+                    city TEXT NOT NULL
                 );
                 """
             )
             self.logger.info("Подготовка таблицы members...")
-            cur.execute(
+            await cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS members (
                     id SERIAL PRIMARY KEY,
@@ -84,22 +83,25 @@ class DatabaseDispatcher:
                 );
                 """
             )
-            self.logger.info("Применение изменений в базе данных...")
-            self.connection.commit()
+            self.logger.info("Применение подготовительных изменений в базе данных...")
+            await self.connection.commit()
             self.logger.info("База данных готова.")
 
-    def close_database(self):
+    async def close_database(self):
         self.logger.info("Отключение от базы данных...")
-        self.connection.close() 
+        await self.connection.close() 
         self.is_connected = False
         self.logger.info("База данных отключена.")
 
-    def get_entries(self, chat_id: int):
-        with self.connection.cursor() as cur:
-            cur.execute("SELECT * FROM users WHERE chat_id = %s", (chat_id,))
-            return cur.fetchall()
+    async def get_entries(self, chat_id: int):
+        async with self.connection.cursor() as cur:
+            await cur.execute("SELECT * FROM users WHERE chat_id = %s", (chat_id,))
+            return await cur.fetchone()
 
-    def destroy_database(self):
-        with self.connection.cursor() as cur:
-            cur.execute("DROP TABLE users, members")
-            self.connection.commit()
+    async def destroy_database(self):
+        self.logger.critical(f"Инициировано уничтожение базы данных. Время начала: {datetime.datetime.now()}")
+        async with self.connection.cursor() as cur:
+            await cur.execute("DROP TABLE users, members")
+            await self.connection.commit()
+        self.logger.critical(f"База данных была уничтожена. Выход...")
+        exit()

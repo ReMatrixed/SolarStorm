@@ -31,3 +31,6 @@ pip-delete-this-directory.txt
 # Переменные окружения
 .env
 .venv
+
+# Файл с настройками
+config.json

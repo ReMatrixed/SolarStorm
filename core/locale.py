@@ -1,14 +1,12 @@
 # Подключение библиотеки для работы с файлами локализации (.json)
 import json
 
-# Подключение внутренних модулей
-from core.logger import internal_log
+# Класс для обработчика локализации
+class LocalizationDispatcher:
+    # Словарь для хранения строк сообщений
+    messages: dict
 
-# Массив для хранения строк сообщений
-messages = []
-
-# Подготовка строк сообщений
-def prepare_messages(filename: str):
-    internal_log.info("Чтение файла локализации...")
-    with open(filename, "r") as locale_file:
-        messages = json.load(locale_file)
+    # Инициализация модуля состоит в чтении файла локализации 
+    def __init__(self, filename: str):
+        with open(filename, "r") as locale_file:
+            self.messages = json.load(locale_file)

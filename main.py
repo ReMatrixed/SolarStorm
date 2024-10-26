@@ -8,7 +8,6 @@ import os
 # Подключение внутренних модулей
 from core.db import DatabaseDispatcher
 from core.locale import LocalizationDispatcher
-import core.presets
 
 # Библиотеки для взаимодействия с Telegram API
 from aiogram import Dispatcher, Bot, types

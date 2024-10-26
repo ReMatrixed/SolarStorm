@@ -13,11 +13,12 @@ import datetime
 # Информация об одном пользователе
 @dataclass
 class UserData:
-    is_member: bool
+    chat_id: int
+    role: str
     rating: int
     realname: str
     form: int
-    school: str
+    city: str
 
 class DatabaseDispatcher:
     # Экземпляр подключения к базе данных
@@ -49,10 +50,11 @@ class DatabaseDispatcher:
     # ВСЕ ДАННЫЕ ОБЯЗАТЕЛЬНЫ
     # 1-й столбец (id) - идентификационный номер, создается по умолчанию
     # 2-й столбец (chat_id) - Telegram ChatID, будет получен от участника, когда он обратится к боту
-    # 3-й столбец (answers) - кол-во успешных ответов на вопросы учеников
-    # 4-й столбец (images) - кол-во изображений, отправленных участниками
-    # 5-й столбец (videos) - кол-во видеоматериалов, отправленных участниками
-    # 6-й столбец (status) - статус участника (AVAILABLE - доступен, WORKING - работает над запросом, PAUSED - временно недоступен, FIRED - покинул чат-центр)
+    # 3-й столбец (subject) - предмет, на вопросы которого отвечает участник (математика, физика, информатика и т.д.)
+    # 4-й столбец (answers) - кол-во успешных ответов на вопросы учеников
+    # 5-й столбец (images) - кол-во изображений, отправленных участниками
+    # 6-й столбец (videos) - кол-во видеоматериалов, отправленных участниками
+    # 7-й столбец (status) - статус участника (AVAILABLE - доступен, WORKING - работает над запросом, PAUSED - временно недоступен, FIRED - покинул чат-центр)
     async def prepare_database(self):
         async with self.connection.cursor() as cur: 
             self.logger.info("Подготовка базы данных...")
@@ -61,7 +63,7 @@ class DatabaseDispatcher:
                 """
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
-                    chat_id BIGINT NOT NULL,
+                    chat_id BIGINT NOT NULL UNIQUE,
                     role TEXT NOT NULL,
                     rating SMALLINT NOT NULL,
                     realname TEXT NOT NULL,
@@ -70,12 +72,15 @@ class DatabaseDispatcher:
                 );
                 """
             )
+            await cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_chat_id_index ON users (chat_id)")
+
             self.logger.info("Подготовка таблицы members...")
             await cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS members (
                     id SERIAL PRIMARY KEY,
-                    chat_id BIGINT NOT NULL,
+                    chat_id BIGINT NOT NULL UNIQUE,
+                    subject TEXT NOT NULL,
                     answers INTEGER NOT NULL,
                     images INTEGER NOT NULL,
                     videos INTEGER NOT NULL,
@@ -83,6 +88,7 @@ class DatabaseDispatcher:
                 );
                 """
             )
+            await cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS members_chat_id_index ON members (chat_id)")
             self.logger.info("Применение подготовительных изменений в базе данных...")
             await self.connection.commit()
             self.logger.info("База данных готова.")
@@ -93,10 +99,16 @@ class DatabaseDispatcher:
         self.is_connected = False
         self.logger.info("База данных отключена.")
 
-    async def get_entries(self, chat_id: int):
+    async def get_entry(self, chat_id: int):
         async with self.connection.cursor() as cur:
             await cur.execute("SELECT * FROM users WHERE chat_id = %s", (chat_id,))
             return await cur.fetchone()
+        
+    async def add_entry(self, userdata: UserData):
+        async with self.connection.cursor() as cur:
+            await cur.execute("INSERT INTO users (chat_id, role, rating, realname, form, city) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (chat_id) DO NOTHING", 
+                              (userdata.chat_id, userdata.role, userdata.rating, userdata.realname, userdata.form, userdata.city))
+            await self.connection.commit()
 
     async def destroy_database(self):
         self.logger.critical(f"Инициировано уничтожение базы данных. Время начала: {datetime.datetime.now()}")

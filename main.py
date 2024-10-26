@@ -6,13 +6,15 @@ import asyncio
 import os
 
 # Подключение внутренних модулей
-from core.db import DatabaseDispatcher
+from core.db import DatabaseDispatcher, UserData
 from core.locale import LocalizationDispatcher
 
 # Библиотеки для взаимодействия с Telegram API
 from aiogram import Dispatcher, Bot, types
 from aiogram import F
 from aiogram.filters.command import Command
+from aiogram.filters.state import State, StatesGroup
+from aiogram.fsm.context import FSMContext
 
 # Инициализация парсера аргументов командной строки
 arg_parser = argparse.ArgumentParser(
@@ -41,24 +43,35 @@ ll = LocalizationDispatcher("resources/messages_ru.json", logger)
 dp = Dispatcher()
 bot = Bot(cfg.get("bot.api_key"))
 
-@dp.callback_query(F.data.startswith("statistics_"))
-async def callbacks_num(callback: types.CallbackQuery):
-    action = callback.data.split("_")[1]
-    if(action == "allow"):
-        pass
-    elif(action == "disallow"):
-        pass
+class NewbieDialog(StatesGroup):
+    question_name = State()
+    question_form = State()
+    question_school = State()
+
+@dp.callback_query(F.text == "statistics_disallow")
+async def disallow_statistics_callback(callback: types.CallbackQuery):
+    userdata = UserData(
+        callback.from_user.id, "user", 0, "Аноним", 0, "СКРЫТ"
+    )
+    await db.add_entry(userdata)
+    await callback.message.answer(ll.get_str("greeting.newbie.finish"))
+    await callback.answer()
+
+@dp.callback_query(F.text == "statistics_allow")
+async def allow_statistics_callback(callback: types.CallbackQuery):
+    await callback.answer()
+
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
-    available_users = await db.get_entries(message.from_user.id)
+    available_users = await db.get_entry(message.from_user.id)
     if(available_users == None):
         buttons = [
             types.InlineKeyboardButton(text="Да ✅", callback_data="statistics_allow"),
             types.InlineKeyboardButton(text="Нет ❌", callback_data="statistics_disallow")
         ],
-        await message.answer(ll.get_str("greeting.hello.newbie"), reply_markup = types.InlineKeyboardMarkup(inline_keyboard=buttons))
+        await message.answer(ll.get_str("greeting.newbie"), reply_markup = types.InlineKeyboardMarkup(inline_keyboard = buttons))
     else:
-        await message.answer(ll.get_str("greeting.hello.known").replace("&&1", available_users[4]))
+        await message.answer(ll.get_str("greeting.known").replace("&&1", available_users[4]))
     
 async def run_system():
     await db.setup(

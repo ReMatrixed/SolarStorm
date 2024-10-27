@@ -13,12 +13,13 @@ import datetime
 # Информация об одном пользователе
 @dataclass
 class UserData:
-    chat_id: int
-    role: str
-    rating: int
-    realname: str
-    form: int
-    city: str
+    available: bool = False
+    chat_id: int = 0
+    role: str = "unknown"
+    rating: int = -1
+    realname: str = "НЕИЗВЕСТНО"
+    form: int = -1
+    city: str = "НЕИЗВЕСТЕН"
 
 class DatabaseDispatcher:
     # Экземпляр подключения к базе данных
@@ -26,7 +27,7 @@ class DatabaseDispatcher:
     logger: logging.Logger
     is_connected = False
 
-    async def setup(self, host: str, port: int, username: str, password: str, dbname: str, logger: logging.Logger):
+    async def setup(self, host: str, port: int, username: str, password: str, dbname: str, logger: logging.Logger) -> None:
         self.logger = logger
         self.logger.info("Подключение к базе данных...")
         self.connection = await psycopg.AsyncConnection.connect(
@@ -55,7 +56,7 @@ class DatabaseDispatcher:
     # 5-й столбец (images) - кол-во изображений, отправленных участниками
     # 6-й столбец (videos) - кол-во видеоматериалов, отправленных участниками
     # 7-й столбец (status) - статус участника (AVAILABLE - доступен, WORKING - работает над запросом, PAUSED - временно недоступен, FIRED - покинул чат-центр)
-    async def prepare_database(self):
+    async def prepare_database(self) -> None:
         async with self.connection.cursor() as cur: 
             self.logger.info("Подготовка базы данных...")
             self.logger.info("Подготовка таблицы users...")
@@ -72,7 +73,7 @@ class DatabaseDispatcher:
                 );
                 """
             )
-            await cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_chat_id_index ON users (chat_id)")
+            await cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS chat_id_index ON users (chat_id)")
 
             self.logger.info("Подготовка таблицы members...")
             await cur.execute(
@@ -88,32 +89,61 @@ class DatabaseDispatcher:
                 );
                 """
             )
-            await cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS members_chat_id_index ON members (chat_id)")
+            await cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS chat_id_index ON members (chat_id)")
+
+            self.logger.info("Подготовка таблицы tasks...")
+            await cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id SERIAL PRIMARY KEY,
+                    chat_id BIGINT NOT NULL UNIQUE,
+                    subject TEXT NOT NULL,
+                    priority SMALLINT NOT NULL,
+                    question TEXT NOT NULL,
+                    executor BIGINT NOT NULL
+                )
+                """
+            )
+            await cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS chat_id_index ON tasks (chat_id)")
+
             self.logger.info("Применение подготовительных изменений в базе данных...")
             await self.connection.commit()
             self.logger.info("База данных готова.")
 
-    async def close_database(self):
+    async def close_database(self) -> None:
         self.logger.info("Отключение от базы данных...")
         await self.connection.close() 
         self.is_connected = False
         self.logger.info("База данных отключена.")
 
-    async def get_entry(self, chat_id: int):
+    # Получить запись в базе данных, chat_id которой соответствует переданному значению
+    async def get_entry(self, chat_id: int) -> UserData:
         async with self.connection.cursor() as cur:
             await cur.execute("SELECT * FROM users WHERE chat_id = %s", (chat_id,))
-            return await cur.fetchone()
+            available_data = await cur.fetchone()
+            if(available_data != None):
+                return UserData(
+                    available = True,
+                    chat_id = available_data[1],
+                    role = available_data[2],
+                    rating = available_data[3],
+                    realname = available_data[4],
+                    form = available_data[5],
+                    city = available_data[6]
+                )
+            else:
+                return UserData(available = False)
         
-    async def add_entry(self, userdata: UserData):
+    # Добавить запись в базу данных, информация передается в качестве dataclass'а UserData
+    async def add_entry(self, userdata: UserData) -> None:
         async with self.connection.cursor() as cur:
             await cur.execute("INSERT INTO users (chat_id, role, rating, realname, form, city) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (chat_id) DO NOTHING", 
                               (userdata.chat_id, userdata.role, userdata.rating, userdata.realname, userdata.form, userdata.city))
             await self.connection.commit()
 
-    async def destroy_database(self):
-        self.logger.critical(f"Инициировано уничтожение базы данных. Время начала: {datetime.datetime.now()}")
-        async with self.connection.cursor() as cur:
-            await cur.execute("DROP TABLE users, members")
-            await self.connection.commit()
-        self.logger.critical(f"База данных была уничтожена. Выход...")
-        exit()
+    # Проверить, существует ли запись в базе данных по chat_id
+    async def is_entry_exists(self, chat_id: int) -> bool:
+        if(await self.get_entry(chat_id) == None):
+            return False
+        else:
+            return True

@@ -51,109 +51,117 @@ fsm_memory_storage = MemoryStorage()
 dp = Dispatcher(storage = fsm_memory_storage)
 bot = Bot(cfg.get("bot.api_key"), default = DefaultBotProperties(parse_mode = ParseMode.HTML))
 
-# Состояния FSM, предназначенные для вступительного опроса пользователя
-class UserDialog(StatesGroup):
-    say_hello = State()
-    fill_anonymous = State()
-    fill_name = State()
-    fill_form = State()
-    fill_city = State()
-    greet_known_user = State()
-    ask_question = State()
-    select_subject = State()
-    start_dialog = State()
-    continue_dialog = State()
-    finish_dialog = State()
+# Состояния FSM, предназначенные для общения с пользователем (role: user)
+class UserContext(StatesGroup):
+    request_form = State() # Запрос номера класса обучения
+    request_city = State() # Запрос названия города проживания
+    request_optional_data = State() # Запрос на сбор дополнительных данных
+    request_realname = State() # Запрос имени и фамилии (необязательно)
+    request_subject = State() # Запрос категории вопроса (школьный предмет)
+    request_question = State() # Запрос вопроса для эксперта
+    request_dialog_permission = State() # Запрос одобрения назначенного системой эксперта
+    continue_dialog = State() # Запрос сообщений для передачи эксперту
+    finish_dialog = State() # Запрос оценки деятельности эксперта (необязательно)
+
+# Состояния FSM, предназначенные для общения с пользователем (role: member)
+class MemberContext(StatesGroup):
+    request_dialog_permission = State() # Запрос одобрения вопроса от пользователя
+    continue_dialog = State() # Запрос сообщений для передачи пользователю
+    finish_dialog = State() # Запрос оценки пользователя (необязательно)
 
 # Паттерн для проверки корректности имени и фамилии
 cyrillic_pattern = re.compile(r"[^а-яёА-ЯЁ\s-]|[\s{2,}] ")
 
-# Callback для ответа на сообщение, касающегося вступительного опроса
-@dp.callback_query(StateFilter(UserDialog.fill_anonymous), F.data.startswith("statistics_"))
-async def disallow_statistics_callback(callback: types.CallbackQuery, state: FSMContext):
+# Handler для команды /start
+@dp.message(Command("start"))
+async def start_bot(message: types.Message, state: FSMContext):
+    user_data = await db.get_entry(message.from_user.id)
+    if(user_data.available):
+        if(user_data.role == "user"):
+            await message.answer(ll.get_str("greeting.user").replace("&&1", user_data.realname))
+            await state.set_state(UserContext.request_subject)
+        elif(user_data.role == "member"):
+            await message.answer(ll.get_str("greeting.member").replace("&&1", user_data.realname))
+            await state.set_state(MemberContext.request_dialog_permission)
+    else:
+        await message.reply(ll.get_str("greeting.newbie"))
+        await message.answer(ll.get_str("greeting.survey.form"))
+        await message.answer(ll.get_str("greeting.survey.form.warning"))
+        await state.set_state(UserContext.request_form)
+
+# Handler для сообщения с ответом на вопрос об классе обучения (1-й вопрос)
+@dp.message(StateFilter(UserContext.request_form))
+async def request_form_reply(message: types.Message, state: FSMContext):
+    if(message.text.isdigit()): # Проверка на то, является ли ответ пользователя числом
+        user_answer = int(message.text) # Преобразование текстового ответа пользователя в число
+        if(user_answer >= 1 and user_answer <= 11): # Проверка на валидность значения класса
+            await state.update_data(form = user_answer)
+            await message.reply(ll.get_str("greeting.survey.city"))
+            await message.answer(ll.get_str("greeting.survey.city.warning"))
+            await state.set_state(UserContext.request_city)
+        else:
+            await message.reply(ll.get_str("greeting.survey.incorrect_value"))
+    else:
+        await message.reply(ll.get_str("greeting.survey.incorrect_value"))
+
+# Handler для сообщения с ответом на вопрос о городе обучения
+@dp.message(StateFilter(UserContext.request_city))
+async def request_city_reply(message: types.Message, state: FSMContext):
+    if(re.search(cyrillic_pattern, message.text) == None): # Проверка на отсутствие запрещённых символов
+        await state.update_data(city = message.text.upper()) # Запись преобразованного значения в FSM
+        reply_buttons = [
+            types.InlineKeyboardButton(text="Да ✅", callback_data="statistics_allow"),
+            types.InlineKeyboardButton(text="Нет ❌", callback_data="statistics_disallow")
+        ],
+        await message.reply(ll.get_str("greeting.survey.optional_data"), reply_markup = types.InlineKeyboardMarkup(inline_keyboard = reply_buttons)) 
+        await state.set_state(UserContext.request_optional_data)
+    else:
+        await message.reply(ll.get_str("greeting.survey.incorrect_value"))
+
+# Callback для ответа на сообщение, касающегося дополнительного опроса
+@dp.callback_query(StateFilter(UserContext.request_optional_data), F.data.startswith("statistics_"))
+async def request_optional_data_permission(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     if(callback.data == "statistics_disallow"):
+        available_data = await state.get_data()
         userdata = UserData(
             available = True,
             chat_id = callback.from_user.id, 
             role = "user", 
             rating = 0, 
             realname = "Аноним", 
-            form = 0, 
-            city = "СКРЫТ"
+            form = available_data.get("form"), 
+            city = available_data.get("city")
         )
         await db.add_entry(userdata)
-        await callback.message.reply(ll.get_str("greeting.newbie.finish"))
-        await state.set_state(UserDialog.ask_question)
+        await callback.message.reply(ll.get_str("greeting.survey.finish"))
+        await state.set_state(UserContext.request_subject)
     elif(callback.data == "statistics_allow"):
-        await callback.message.reply(ll.get_str("greeting.newbie.realname"))
-        await callback.message.answer(ll.get_str("greeting.newbie.realname.warning"))
-        await state.set_state(UserDialog.fill_name)
-
-# Handler для команды /start
-@dp.message(Command("start"))
-async def start_command(message: types.Message, state: FSMContext):
-    await state.set_state(UserDialog.say_hello)
-    user_data = await db.get_entry(message.from_user.id)
-    if(user_data.available):
-        await message.answer(ll.get_str("greeting.known").replace("&&1", user_data.realname))
-        await state.set_state(UserDialog.ask_question)
-    else:
-        buttons = [
-            types.InlineKeyboardButton(text="Да ✅", callback_data="statistics_allow"),
-            types.InlineKeyboardButton(text="Нет ❌", callback_data="statistics_disallow")
-        ],
-        await message.answer(ll.get_str("greeting.newbie"), reply_markup = types.InlineKeyboardMarkup(inline_keyboard = buttons))
-        await state.set_state(UserDialog.fill_anonymous)
+        await callback.message.reply(ll.get_str("greeting.survey.realname"))
+        await callback.message.answer(ll.get_str("greeting.survey.realname.warning"))
+        await state.set_state(UserContext.request_realname)
 
 # Handler для сообщения с ответом на вопрос об имени и фамилии
-@dp.message(StateFilter(UserDialog.fill_name))
-async def fill_name_reply(message: types.Message, state: FSMContext):
-    logger.info(f"Realname: {message.text}")
+@dp.message(StateFilter(UserContext.request_realname))
+async def request_realname_reply(message: types.Message, state: FSMContext):
     if(re.search(cyrillic_pattern, message.text) == None):
-        await state.update_data(realname = " ".join(message.text.split(" ")[:2]).title())
-        await message.reply(ll.get_str("greeting.newbie.form"))
-        await message.answer(ll.get_str("greeting.newbie.form.warning"))
-        await state.set_state(UserDialog.fill_form)
-    else:
-        await message.reply(ll.get_str("greeting.newbie.incorrect"))
-        await state.set_state(UserDialog.fill_name)
-
-# Handler для сообщения с ответом на вопрос об классе обучения
-@dp.message(StateFilter(UserDialog.fill_form))
-async def fill_form_reply(message: types.Message, state: FSMContext):
-    logger.info(f"Form: {message.text}")
-    if(message.text.isdigit() and int(message.text) >= 1 and int(message.text) <= 11):
-        await state.update_data(form = int(message.text))
-        await message.reply(ll.get_str("greeting.newbie.city"))
-        await message.answer(ll.get_str("greeting.newbie.city.warning"))
-        await state.set_state(UserDialog.fill_city)
-    else:
-        await message.reply(ll.get_str("greeting.newbie.incorrect"))
-        await state.set_state(UserDialog.fill_form)
-
-# Handler для сообщения с ответом на вопрос о городе обучения
-@dp.message(StateFilter(UserDialog.fill_city))
-async def fill_city_reply(message: types.Message, state: FSMContext):
-    logger.info(f"City: {message.text}")
-    if(re.search(cyrillic_pattern, message.text) == None):
-        fsm_data = await state.get_data()
+        await state.update_data(realname = message.text.title())
+        available_data = await state.get_data()
         await db.add_entry(
             UserData(
                 available = True,
                 chat_id = message.from_user.id,
                 role = "user",
                 rating = 0,
-                realname = fsm_data.get("realname"),
-                form = fsm_data.get("form"),
-                city = message.text.split(" ")[0].upper()
+                realname = available_data.get("realname"),
+                form = available_data.get("form"),
+                city = available_data.get("city")
             )
         )
-        await message.reply(ll.get_str("greeting.newbie.finish"))
-        await state.set_state(UserDialog.ask_question)
+        await message.reply(ll.get_str("greeting.survey.finish"))
+        await state.set_state(UserContext.request_subject)
     else:
-        await message.reply(ll.get_str("greeting.newbie.incorrect"))
-        await state.set_state(UserDialog.fill_city)
+        await message.reply(ll.get_str("greeting.survey.incorrect_value"))
 
 async def run_system():
     await db.setup(

@@ -4,14 +4,14 @@ import json
 # Подключение библиотеки логгирования
 import logging
 
-# Класс для обработчика локализации
-class LocalizationDispatcher:
+# Класс для языкового обработчика
+class LanguageDispatcher:
     # Словарь для хранения строк сообщений
     messages: dict
     # Объект логгера
     logger: logging.Logger
 
-    # Инициализация модуля состоит в чтении файла локализации 
+    # Инциализация модуля, чтение данных локализации
     def __init__(self, filename: str, logger: logging.Logger) -> None:
         self.logger = logger
         self.logger.info("Подготовка диспетчера локалиизаций...")
@@ -20,7 +20,7 @@ class LocalizationDispatcher:
             self.messages = json.load(locale_file)
         self.logger.info("Диспетчер локализаций инициализирован.")
 
-    # Получение значения по ключу
+    # Получение значения локализации по ключу
     def get_str(self, key: str) -> str:
         source_str = self.messages.get(key)
         if(source_str != None):

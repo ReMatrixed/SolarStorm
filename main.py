@@ -8,7 +8,7 @@ import re
 
 # Подключение внутренних модулей
 from core.db import DatabaseDispatcher, UserData
-from core.locale import LocalizationDispatcher
+from core.locale import LanguageDispatcher
 
 # Подключение модулей библиотеки aiogram для взаимодействия с Telegram Bot API
 from aiogram import Dispatcher, Bot, types
@@ -44,7 +44,7 @@ with open(args.config, "r") as config_file:
 
 # Инициализация внутренних модулей
 db = DatabaseDispatcher()
-ll = LocalizationDispatcher("resources/messages_ru.json", logger)
+ll = LanguageDispatcher("resources/messages_ru.json", logger)
 
 # Настройка Telegram-бота
 fsm_memory_storage = MemoryStorage()
@@ -57,8 +57,8 @@ class UserContext(StatesGroup):
     request_city = State() # Запрос названия города проживания
     request_optional_data = State() # Запрос на сбор дополнительных данных
     request_realname = State() # Запрос имени и фамилии (необязательно)
-    request_subject = State() # Запрос категории вопроса (школьный предмет)
     request_question = State() # Запрос вопроса для эксперта
+    request_subject = State() # Запрос категории вопроса (школьный предмет)
     request_dialog_permission = State() # Запрос одобрения назначенного системой эксперта
     continue_dialog = State() # Запрос сообщений для передачи эксперту
     finish_dialog = State() # Запрос оценки деятельности эксперта (необязательно)
@@ -128,7 +128,7 @@ async def request_optional_data_permission(callback: types.CallbackQuery, state:
             available = True,
             chat_id = callback.from_user.id, 
             role = "user", 
-            rating = 0, 
+            rating = 100, 
             realname = "Аноним", 
             form = available_data.get("form"), 
             city = available_data.get("city")
@@ -152,7 +152,7 @@ async def request_realname_reply(message: types.Message, state: FSMContext):
                 available = True,
                 chat_id = message.from_user.id,
                 role = "user",
-                rating = 0,
+                rating = 100,
                 realname = available_data.get("realname"),
                 form = available_data.get("form"),
                 city = available_data.get("city")

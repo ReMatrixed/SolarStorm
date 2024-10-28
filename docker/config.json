@@ -4,5 +4,10 @@
     "db.username": "POSTGRES_USERNAME_HERE",
     "db.password": "POSTGRES_PASSWORD_HERE",
     "db.name": "POSTGRES_DB_NAME_HERE",
+
+    "redis.host": "redis-db",
+    "redis.port": 6379,
+    "redis.password": "REDIS_PASSWORD_HERE",
+
     "bot.api_key": "TELEGRAM_BOT_API_KEY_HERE"
 }

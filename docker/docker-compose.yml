@@ -21,8 +21,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1"
-          memory: 1G
+          cpus: 1
+          memory: 512M
 
   postgres-admin:
     image: adminer
@@ -33,9 +33,24 @@ services:
     networks:
       - my-external-network
 
+  redis-db:
+    image: redis:alpine
+    container_name: redis-db
+    restart: unless-stopped
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    volumes:
+      - ./config/redis.conf:/etc/redis/redis.conf
+    ports:
+      - 6379:6379
+    deploy:
+      resources:
+        limits:
+          cpus: 1
+          memory: 128M
+
   solarstorm-bot:
     image: solarstorm:latest
     container_name: solarstorm-bot
     restart: unless-stopped
     volumes:
-      - ./config:/config
+      - ./config.json:/config/config.json

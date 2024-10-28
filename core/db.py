@@ -12,7 +12,7 @@ import logging
 class UserData:
     available: bool = False
     chat_id: int = 0
-    role: str = "unknown"
+    role: str = "user"
     rating: int = -1
     realname: str = "НЕИЗВЕСТНО"
     form: int = -1

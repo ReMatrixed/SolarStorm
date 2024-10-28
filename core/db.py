@@ -7,9 +7,6 @@ from dataclasses import dataclass
 # Подключение библиотеки логгирования
 import logging
 
-# Подключение других библиотек
-import datetime
-
 # Информация об одном пользователе
 @dataclass
 class UserData:
@@ -21,6 +18,7 @@ class UserData:
     form: int = -1
     city: str = "НЕИЗВЕСТЕН"
 
+# Основной класс управления БД
 class DatabaseDispatcher:
     # Экземпляр подключения к базе данных
     connection: psycopg.Connection
@@ -56,6 +54,15 @@ class DatabaseDispatcher:
     # 5-й столбец (images) - кол-во изображений, отправленных участниками
     # 6-й столбец (videos) - кол-во видеоматериалов, отправленных участниками
     # 7-й столбец (status) - статус участника (AVAILABLE - доступен, WORKING - работает над запросом, PAUSED - временно недоступен, FIRED - покинул чат-центр)
+
+    # Структура базы данных запросов
+    # 1-й столбец (id) - идентификационный номер, создается по умолчанию
+    # 2-й столбец (chat_id) - Telegram ChatID, будет получен от Пользователя
+    # 3-й столбец (subject) - предмет, по которому задается вопрос
+    # 4-й столбец (priority) - приоритет запроса, вычисляется при его создании
+    # 5-й столбец (question) - текст запроса (вопрос от Пользователя)
+    # 6-й столбец (status) - статус запроса (APPROVED - выполняется, PENDING - ожидает принятия, CANCELED - отменен)
+    # 7-й столбец (employee) - chat_id участника, принявшего запрос
     async def prepare_database(self) -> None:
         async with self.connection.cursor() as cur: 
             self.logger.info("Подготовка базы данных...")
@@ -100,7 +107,8 @@ class DatabaseDispatcher:
                     subject TEXT NOT NULL,
                     priority SMALLINT NOT NULL,
                     question TEXT NOT NULL,
-                    executor BIGINT NOT NULL
+                    status TEXT NOT NULL,
+                    employee BIGINT
                 )
                 """
             )
@@ -109,12 +117,6 @@ class DatabaseDispatcher:
             self.logger.info("Применение подготовительных изменений в базе данных...")
             await self.connection.commit()
             self.logger.info("База данных готова.")
-
-    async def close_database(self) -> None:
-        self.logger.info("Отключение от базы данных...")
-        await self.connection.close() 
-        self.is_connected = False
-        self.logger.info("База данных отключена.")
 
     # Получить запись в базе данных, chat_id которой соответствует переданному значению
     async def get_entry(self, chat_id: int) -> UserData:
@@ -147,3 +149,10 @@ class DatabaseDispatcher:
             return False
         else:
             return True
+        
+    # Отключить базу данных    
+    async def close_database(self) -> None:
+        self.logger.info("Отключение от базы данных...")
+        await self.connection.close() 
+        self.is_connected = False
+        self.logger.info("База данных отключена.")

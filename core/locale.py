@@ -8,17 +8,22 @@ import logging
 class LanguageDispatcher:
     # Словарь для хранения строк сообщений
     messages: dict
+    censorship: list
     # Объект логгера
     logger: logging.Logger
 
-    # Инциализация модуля, чтение данных локализации
-    def __init__(self, filename: str, logger: logging.Logger) -> None:
+    # Инциализация модуля, чтение данных
+    def __init__(self, locale_file_path: str, censorship_file_path: str, logger: logging.Logger) -> None:
         self.logger = logger
-        self.logger.info("Подготовка диспетчера локалиизаций...")
-        self.logger.info(f"Чтение файла: {filename}...")
-        with open(filename, "r") as locale_file:
+        self.logger.info("Подготовка языкового диспетчера...")
+        self.logger.info(f"Чтение файла локализации ({locale_file_path})...")
+        with open(locale_file_path, "r") as locale_file:
             self.messages = json.load(locale_file)
-        self.logger.info("Диспетчер локализаций инициализирован.")
+        self.logger.info(f"Чтение файла цензуры (мат-фильтр) ({censorship_file_path})...")
+        with open(censorship_file_path, "r") as censorship_file:
+            self.censorship = censorship_file.read().replace("\n", " ").split(" ")
+            print(self.censorship)
+        self.logger.info("Языковой диспетчер инициализирован.")
 
     # Получение значения локализации по ключу
     def get_str(self, key: str) -> str:
@@ -29,3 +34,10 @@ class LanguageDispatcher:
         else:
             # Если значение не найдено в файле локализации, возвращается "заглушка"
             return "UNKNOWN"
+        
+    def is_correct(self, text: str) -> bool:
+        text = text.lower() # Приведение всей строки под единый (нижний) регистр
+        for bad_word in self.censorship: 
+            if(bad_word in text): # Если в тексте содержится нецензурное слово,
+                return False      # возвращается False
+        return True

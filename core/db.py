@@ -136,11 +136,21 @@ class DatabaseDispatcher:
             else:
                 return UserData(available = False)
         
-    # Добавить запись в базу данных, информация передается в качестве dataclass'а UserData
-    async def add_entry(self, userdata: UserData) -> None:
+    # Добавить/изменить запись в базе данных, информация передается в качестве dataclass'а UserData
+    async def update_entry(self, userdata: UserData) -> None:
         async with self.connection.cursor() as cur:
-            await cur.execute("INSERT INTO users (chat_id, role, rating, realname, form, city) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (chat_id) DO NOTHING", 
-                              (userdata.chat_id, userdata.role, userdata.rating, userdata.realname, userdata.form, userdata.city))
+            await cur.execute(
+                """
+                INSERT INTO users (chat_id, role, rating, realname, form, city) VALUES (%s, %s, %s, %s, %s, %s) 
+                ON CONFLICT (chat_id) DO UPDATE SET 
+                    role = EXCLUDED.role,
+                    rating = EXCLUDED.rating,
+                    realname = EXCLUDED.realname,
+                    form = EXCLUDED.form,
+                    city = EXCLUDED.city
+                """, 
+                (userdata.chat_id, userdata.role, userdata.rating, userdata.realname, userdata.form, userdata.city)
+            )
             await self.connection.commit()
 
     # Проверить, существует ли запись в базе данных по chat_id

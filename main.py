@@ -16,7 +16,7 @@ from aiogram import F
 from aiogram.filters.command import Command
 from aiogram.filters.state import State, StatesGroup, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.redis import RedisStorage, Redis
 from aiogram.enums.parse_mode import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
@@ -44,10 +44,20 @@ with open(args.config, "r") as config_file:
 
 # Инициализация внутренних модулей
 db = DatabaseDispatcher()
-ll = LanguageDispatcher("resources/messages_ru.json", logger)
+ll = LanguageDispatcher(
+    locale_file_path = "resources/ru/messages.json", 
+    censorship_file_path = "resources/ru/censorship.txt",
+    logger = logger
+)
 
 # Настройка Telegram-бота
-fsm_memory_storage = MemoryStorage()
+fsm_memory_storage = RedisStorage(
+    Redis(
+        host = cfg.get("redis.host"),
+        port = cfg.get("redis.port"),
+        password = cfg.get("redis.password")
+    )
+)
 dp = Dispatcher(storage = fsm_memory_storage)
 bot = Bot(cfg.get("bot.api_key"), default = DefaultBotProperties(parse_mode = ParseMode.HTML))
 
@@ -79,7 +89,7 @@ async def start_bot(message: types.Message, state: FSMContext):
     if(user_data.available):
         if(user_data.role == "user"):
             await message.answer(ll.get_str("greeting.user").replace("&&1", user_data.realname))
-            await state.set_state(UserContext.request_subject)
+            await state.set_state(UserContext.request_question)
         elif(user_data.role == "member"):
             await message.answer(ll.get_str("greeting.member").replace("&&1", user_data.realname))
             await state.set_state(MemberContext.request_dialog_permission)
@@ -133,7 +143,7 @@ async def request_optional_data_permission(callback: types.CallbackQuery, state:
             form = available_data.get("form"), 
             city = available_data.get("city")
         )
-        await db.add_entry(userdata)
+        await db.update_entry(userdata)
         await callback.message.reply(ll.get_str("greeting.survey.finish"))
         await state.set_state(UserContext.request_subject)
     elif(callback.data == "statistics_allow"):
@@ -147,7 +157,7 @@ async def request_realname_reply(message: types.Message, state: FSMContext):
     if(re.search(cyrillic_pattern, message.text) == None):
         await state.update_data(realname = message.text.title())
         available_data = await state.get_data()
-        await db.add_entry(
+        await db.update_entry(
             UserData(
                 available = True,
                 chat_id = message.from_user.id,
@@ -159,18 +169,41 @@ async def request_realname_reply(message: types.Message, state: FSMContext):
             )
         )
         await message.reply(ll.get_str("greeting.survey.finish"))
-        await state.set_state(UserContext.request_subject)
+        await state.set_state(UserContext.request_question)
     else:
         await message.reply(ll.get_str("greeting.survey.incorrect_value"))
 
+# Handler для получения текста запроса от пользователя
+# Проверки, которые проводятся во время обработки запроса:
+# 1. Проверка текста по мат-фильтру (resources/ru/censorship.txt)
+@dp.message(StateFilter(UserContext.request_question))
+async def request_user_question(message: types.Message, state: FSMContext):
+    current_user = await db.get_entry(message.from_user.id)
+    if(ll.is_correct(message.text)):
+        await message.reply("GOOD")
+    else:
+        current_user.rating -= 5
+        await db.update_entry(current_user)
+        await message.reply(ll.get_str("dialog.user.request.bad_language").replace("$$1", str(current_user.rating)))
+
+# Handler для сообщений от пользователя, которые были отправлены во время диалога с экспертом
+@dp.message(StateFilter(UserContext.continue_dialog))
+async def continue_user_dialog(message: types.Message, state: FSMContext):
+    pass
+
+# Handler для сообщений от эксперта, которые были отправлены во время диалога с экспертом
+@dp.message(StateFilter(MemberContext.continue_dialog))
+async def continue_member_dialog(message: types.Message, state: FSMContext):
+    pass
+
 async def run_system():
     await db.setup(
-        cfg.get("db.host"),
-        cfg.get("db.port"),
-        cfg.get("db.username"),
-        cfg.get("db.password"),
-        cfg.get("db.name"),
-        logger
+        host = cfg.get("db.host"),
+        port = cfg.get("db.port"),
+        username = cfg.get("db.username"),
+        password = cfg.get("db.password"),
+        dbname = cfg.get("db.name"),
+        logger = logger
     )
     await db.prepare_database()
     try:

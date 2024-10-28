@@ -1,0 +1,8 @@
+{
+    "db.host": "postgres-db",
+    "db.port": 5432,
+    "db.username": "POSTGRES_USERNAME_HERE",
+    "db.password": "POSTGRES_PASSWORD_HERE",
+    "db.name": "POSTGRES_DB_NAME_HERE",
+    "bot.api_key": "TELEGRAM_BOT_API_KEY_HERE"
+}

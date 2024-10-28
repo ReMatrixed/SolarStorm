@@ -1,0 +1,41 @@
+services:
+  postgres-db:
+    image: postgres:alpine
+    container_name: postgres-db
+    restart: unless-stopped
+    ports:
+      - 5432:5432
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    shm_size: 256MB
+    environment:
+      POSTGRES_DB: POSTGRES_DB_NAME_HERE
+      POSTGRES_USER: POSTGRES_USERNAME_HERE
+      POSTGRES_PASSWORD: POSTGRESS_PASSWORD_HERE
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U POSTGRES_USERNAME_HERE -d POSTGRES_DB_NAME_HERE"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+
+  postgres-admin:
+    image: adminer
+    container_name: postgres-admin
+    restart: unless-stopped
+    ports:
+      - 9999:8080
+    networks:
+      - my-external-network
+
+  solarstorm-bot:
+    image: solarstorm:latest
+    container_name: solarstorm-bot
+    restart: unless-stopped
+    volumes:
+      - ./config:/config

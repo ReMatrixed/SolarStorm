@@ -22,7 +22,6 @@ class LanguageDispatcher:
         self.logger.info(f"Чтение файла цензуры (мат-фильтр) ({censorship_file_path})...")
         with open(censorship_file_path, "r") as censorship_file:
             self.censorship = censorship_file.read().replace("\n", " ").split(" ")
-            print(self.censorship)
         self.logger.info("Языковой диспетчер инициализирован.")
 
     # Получение значения локализации по ключу

@@ -28,6 +28,9 @@ kb_subject_selection_buttons = [
         types.InlineKeyboardButton(text = "🌱 Биология", callback_data = "subject_biology")
     ],
     [
+        types.InlineKeyboardButton(text = "🎩 Английский язык", callback_data = "subject_english")
+    ],
+    [
         types.InlineKeyboardButton(text = "💼 Обществознание", callback_data = "subject_social")
     ]
 ]

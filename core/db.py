@@ -128,7 +128,7 @@ class DatabaseDispatcher:
                     question TEXT NOT NULL,
                     priority SMALLINT NOT NULL,
                     status TEXT NOT NULL,
-                    member BIGINT
+                    member BIGINT NOT NULL
                 )
                 """
             )

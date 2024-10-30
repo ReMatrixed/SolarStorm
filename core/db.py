@@ -51,7 +51,7 @@ class DatabaseDispatcher:
         self.logger = logger
         self.logger.info("Подключение к базе данных...")
         self.connection = await psycopg.AsyncConnection.connect(
-            f"hostaddr={host} port={port} dbname={dbname} user={username} password={password}"
+            f"host={host} port={port} dbname={dbname} user={username} password={password}"
         )
         self.logger.info("База данных подключена.")
         self.is_connected = True

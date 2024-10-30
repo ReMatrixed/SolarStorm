@@ -7,8 +7,9 @@ import os
 import re
 
 # Подключение внутренних модулей
-from core.db import DatabaseDispatcher, UserData
+from core.db import DatabaseDispatcher, UserData, TaskData, MemberData
 from core.locale import LanguageDispatcher
+import core.presets
 
 # Подключение модулей библиотеки aiogram для взаимодействия с Telegram Bot API
 from aiogram import Dispatcher, Bot, types
@@ -51,14 +52,14 @@ ll = LanguageDispatcher(
 )
 
 # Настройка Telegram-бота
-fsm_memory_storage = RedisStorage(
+fsm_redis_storage = RedisStorage(
     Redis(
         host = cfg.get("redis.host"),
         port = cfg.get("redis.port"),
         password = cfg.get("redis.password")
     )
 )
-dp = Dispatcher(storage = fsm_memory_storage)
+dp = Dispatcher(storage = fsm_redis_storage)
 bot = Bot(cfg.get("bot.api_key"), default = DefaultBotProperties(parse_mode = ParseMode.HTML))
 
 # Состояния FSM, предназначенные для общения с пользователем (role: user)
@@ -85,8 +86,8 @@ cyrillic_pattern = re.compile(r"[^а-яёА-ЯЁ\s-]|[\s{2,}] ")
 # Handler для команды /start
 @dp.message(Command("start"))
 async def start_bot(message: types.Message, state: FSMContext):
-    user_data = await db.get_entry(message.from_user.id)
-    if(user_data.available):
+    user_data = await db.get_user_entry(message.from_user.id)
+    if(user_data.is_available):
         if(user_data.role == "user"):
             await message.answer(ll.get_str("greeting.user").replace("&&1", user_data.realname))
             await state.set_state(UserContext.request_question)
@@ -119,23 +120,21 @@ async def request_form_reply(message: types.Message, state: FSMContext):
 async def request_city_reply(message: types.Message, state: FSMContext):
     if(re.search(cyrillic_pattern, message.text) == None): # Проверка на отсутствие запрещённых символов
         await state.update_data(city = message.text.upper()) # Запись преобразованного значения в FSM
-        reply_buttons = [
-            types.InlineKeyboardButton(text="Да ✅", callback_data="statistics_allow"),
-            types.InlineKeyboardButton(text="Нет ❌", callback_data="statistics_disallow")
-        ],
-        await message.reply(ll.get_str("greeting.survey.optional_data"), reply_markup = types.InlineKeyboardMarkup(inline_keyboard = reply_buttons)) 
+        await message.reply(
+            ll.get_str("greeting.survey.optional_data"), 
+            reply_markup = core.presets.kb_optional_data
+        ) 
         await state.set_state(UserContext.request_optional_data)
     else:
         await message.reply(ll.get_str("greeting.survey.incorrect_value"))
 
 # Callback для ответа на сообщение, касающегося дополнительного опроса
 @dp.callback_query(StateFilter(UserContext.request_optional_data), F.data.startswith("statistics_"))
-async def request_optional_data_permission(callback: types.CallbackQuery, state: FSMContext):
+async def request_optional_data_callback(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     if(callback.data == "statistics_disallow"):
         available_data = await state.get_data()
         userdata = UserData(
-            available = True,
             chat_id = callback.from_user.id, 
             role = "user", 
             rating = 100, 
@@ -143,7 +142,7 @@ async def request_optional_data_permission(callback: types.CallbackQuery, state:
             form = available_data.get("form"), 
             city = available_data.get("city")
         )
-        await db.update_entry(userdata)
+        await db.update_user_entry(userdata)
         await callback.message.reply(ll.get_str("greeting.survey.finish"))
         await state.set_state(UserContext.request_subject)
     elif(callback.data == "statistics_allow"):
@@ -157,9 +156,8 @@ async def request_realname_reply(message: types.Message, state: FSMContext):
     if(re.search(cyrillic_pattern, message.text) == None):
         await state.update_data(realname = message.text.title())
         available_data = await state.get_data()
-        await db.update_entry(
+        await db.update_user_entry(
             UserData(
-                available = True,
                 chat_id = message.from_user.id,
                 role = "user",
                 rating = 100,
@@ -178,13 +176,33 @@ async def request_realname_reply(message: types.Message, state: FSMContext):
 # 1. Проверка текста по мат-фильтру (resources/ru/censorship.txt)
 @dp.message(StateFilter(UserContext.request_question))
 async def request_user_question(message: types.Message, state: FSMContext):
-    current_user = await db.get_entry(message.from_user.id)
     if(ll.is_correct(message.text)):
-        await message.reply("GOOD")
+        await state.update_data(question = message.text)
+        await message.reply(ll.get_str("dialog.user.request.subject"), reply_markup = core.presets.kb_subject_selection)
+        await state.set_state(UserContext.request_subject)
     else:
+        current_user = await db.get_user_entry(message.from_user.id)
         current_user.rating -= 5
-        await db.update_entry(current_user)
+        await db.update_user_entry(current_user)
         await message.reply(ll.get_str("dialog.user.request.bad_language").replace("$$1", str(current_user.rating)))
+
+# Handler для ответа от пользователя на вопрос о предмете
+@dp.callback_query(StateFilter(UserContext.request_subject), F.data.startswith("subject_"))
+async def request_subject_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    collected_task_data = await state.get_data()
+    await db.update_task_entry(
+        TaskData(
+            user_chat_id = callback.from_user.id,
+            subject = callback.data.replace("subject_", "").upper()[0],
+            priority = 0,
+            question = collected_task_data.get("question"),
+            status = "PENDING",
+            member_chat_id = 0
+        )
+    )
+    await callback.message.reply(ll.get_str("dialog.user.request.pending"))
+    
 
 # Handler для сообщений от пользователя, которые были отправлены во время диалога с экспертом
 @dp.message(StateFilter(UserContext.continue_dialog))

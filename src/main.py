@@ -70,6 +70,7 @@ class UserContext(StatesGroup):
     request_realname = State() # Запрос имени и фамилии (необязательно)
     request_question = State() # Запрос вопроса для эксперта
     request_subject = State() # Запрос категории вопроса (школьный предмет)
+    wait_for_anwser = State() # Ответ пользователю во время ожидания рассмотрения запроса
     request_dialog_permission = State() # Запрос одобрения назначенного системой эксперта
     continue_dialog = State() # Запрос сообщений для передачи эксперту
     finish_dialog = State() # Запрос оценки деятельности эксперта (необязательно)
@@ -99,6 +100,16 @@ async def start_bot(message: types.Message, state: FSMContext):
         await message.answer(ll.get_str("greeting.survey.form"))
         await message.answer(ll.get_str("greeting.survey.form.warning"))
         await state.set_state(UserContext.request_form)
+
+# Handler для команды об отмене запроса (task)
+@dp.message(Command("cancelrequest"))
+async def cancel_user_request(message: types.Message, state: FSMContext):
+    if(await db.is_task_entry_exists(message.from_user.id)):
+        await db.delete_task_entry(message.from_user.id)
+        await message.reply(ll.get_str("request.user.cancel.success"))
+        await state.set_state(UserContext.request_question)
+    else:
+        await message.reply(ll.get_str("request.user.cancel.not_found"))
 
 # Handler для сообщения с ответом на вопрос об классе обучения (1-й вопрос)
 @dp.message(StateFilter(UserContext.request_form))
@@ -176,15 +187,18 @@ async def request_realname_reply(message: types.Message, state: FSMContext):
 # 1. Проверка текста по мат-фильтру (resources/ru/censorship.txt)
 @dp.message(StateFilter(UserContext.request_question))
 async def request_user_question(message: types.Message, state: FSMContext):
-    if(ll.is_correct(message.text)):
-        await state.update_data(question = message.text)
-        await message.reply(ll.get_str("dialog.user.request.subject"), reply_markup = core.presets.kb_subject_selection)
-        await state.set_state(UserContext.request_subject)
+    if(await db.is_task_entry_exists(message.from_user.id)):
+        await message.reply(ll.get_str("request.user.exists"))
     else:
-        current_user = await db.get_user_entry(message.from_user.id)
-        current_user.rating -= 5
-        await db.update_user_entry(current_user)
-        await message.reply(ll.get_str("dialog.user.request.bad_language").replace("$$1", str(current_user.rating)))
+        if(ll.is_correct(message.text)):
+            await state.update_data(question = message.text)
+            await message.reply(ll.get_str("request.user.subject"), reply_markup = core.presets.kb_subject_selection)
+            await state.set_state(UserContext.request_subject)
+        else:
+            current_user = await db.get_user_entry(message.from_user.id)
+            current_user.rating -= 5
+            await db.update_user_entry(current_user)
+            await message.reply(ll.get_str("request.user.bad_language").replace("$$1", str(current_user.rating)))
 
 # Handler для ответа от пользователя на вопрос о предмете
 @dp.callback_query(StateFilter(UserContext.request_subject), F.data.startswith("subject_"))
@@ -201,7 +215,12 @@ async def request_subject_callback(callback: types.CallbackQuery, state: FSMCont
             member_chat_id = 0
         )
     )
-    await callback.message.reply(ll.get_str("dialog.user.request.pending"))
+    await callback.message.reply(ll.get_str("request.user.pending"))
+    await state.set_state(UserContext.wait_for_anwser)
+
+@dp.message(StateFilter(UserContext.wait_for_anwser))
+async def help_waiting_user(message: types.Message):
+    await message.reply(ll.get_str("request.user.wait"))
 
 # Handler для сообщений от пользователя, которые были отправлены во время диалога с экспертом
 @dp.message(StateFilter(UserContext.continue_dialog))

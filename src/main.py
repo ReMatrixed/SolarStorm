@@ -155,7 +155,7 @@ async def request_optional_data_callback(callback: types.CallbackQuery, state: F
         )
         await db.update_user_entry(userdata)
         await callback.message.reply(ll.get_str("greeting.survey.finish"))
-        await state.set_state(UserContext.request_subject)
+        await state.set_state(UserContext.request_question)
     elif(callback.data == "statistics_allow"):
         await callback.message.reply(ll.get_str("greeting.survey.realname"))
         await callback.message.answer(ll.get_str("greeting.survey.realname.warning"))

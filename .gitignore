@@ -33,4 +33,4 @@ pip-delete-this-directory.txt
 .venv
 
 # Файл с настройками
-config/config.json
+config.json

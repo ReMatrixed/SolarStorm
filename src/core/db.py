@@ -213,12 +213,39 @@ class DatabaseDispatcher:
             )
             await self.connection.commit()
 
-    # Проверить, существует ли запись в базе данных по chat_id
-    async def is_entry_exists(self, chat_id: int) -> bool:
-        if(await self.get_entry(chat_id) == None):
-            return False
-        else:
-            return True
+    # Проверить, существует ли запись в таблице users по chat_id
+    async def is_user_entry_exists(self, chat_id: int) -> bool:
+        async with self.connection.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT EXISTS(SELECT 1 FROM users WHERE chat_id=%s)
+                """,
+                (chat_id,)
+            )
+            available_data = await cur.fetchone()
+            return available_data[0]
+
+    # Проверить, существует ли запись в таблице tasks по chat_id  
+    async def is_task_entry_exists(self, chat_id: int) -> bool:
+        async with self.connection.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT EXISTS(SELECT 1 FROM tasks WHERE chat_id=%s)
+                """,
+                (chat_id,)
+            )
+            available_data = await cur.fetchone()
+            return available_data[0]
+        
+    async def delete_task_entry(self, chat_id: int):
+        async with self.connection.cursor() as cur:
+            await cur.execute(
+                """
+                DELETE FROM tasks WHERE chat_id = %s
+                """,
+                (chat_id,)
+            )
+            await self.connection.commit()
         
     # Отключить базу данных    
     async def close_database(self) -> None:

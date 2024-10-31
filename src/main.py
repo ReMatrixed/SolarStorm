@@ -29,19 +29,19 @@ arg_parser = argparse.ArgumentParser(
 arg_parser.add_argument("-c", "--config", required = True)
 args = arg_parser.parse_args()
 
+# Чтение файла конфигурации
+with open(args.config, "r") as config_file:
+    cfg = json.load(config_file)
+
 # Настройка логгирования в файл
 logging.basicConfig(
-    filename = "solarstorm.log", 
+    filename = cfg.get("logger.log.filepath"), 
     encoding = "utf-8",
     level = logging.DEBUG,
 )
 logger = logging.getLogger("main.py")
 logger.info("===========================")
 logger.info("Запуск бота SOLARSTORM...")
-
-# Чтение файла конфигурации
-with open(args.config, "r") as config_file:
-    cfg = json.load(config_file)
 
 # Инициализация внутренних модулей
 db = DatabaseDispatcher()
@@ -202,7 +202,6 @@ async def request_subject_callback(callback: types.CallbackQuery, state: FSMCont
         )
     )
     await callback.message.reply(ll.get_str("dialog.user.request.pending"))
-    
 
 # Handler для сообщений от пользователя, которые были отправлены во время диалога с экспертом
 @dp.message(StateFilter(UserContext.continue_dialog))
@@ -214,7 +213,9 @@ async def continue_user_dialog(message: types.Message, state: FSMContext):
 async def continue_member_dialog(message: types.Message, state: FSMContext):
     pass
 
+# Подготовка и запуск основных сервисов
 async def run_system():
+    # Подключение к базе данных
     await db.setup(
         host = cfg.get("db.host"),
         port = cfg.get("db.port"),
@@ -223,13 +224,16 @@ async def run_system():
         dbname = cfg.get("db.name"),
         logger = logger
     )
+    # Подготовка таблиц в базе данных
     await db.prepare_database()
+    # Обработка исключений, которые могут быть вызваны aiogram'ом
     try:
         await dp.start_polling(bot)
     except Exception as err:
         logger.critical(f"Произошла ошибка при выполнении Bot Polling: {err}")
+    # Отключение от базы данных
     await db.close_database()
 
-# Основной код 
+# Проверка и запуск async-функции
 if __name__ == "__main__":
     asyncio.run(run_system())

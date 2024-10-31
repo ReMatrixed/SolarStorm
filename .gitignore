@@ -32,5 +32,5 @@ pip-delete-this-directory.txt
 .env
 .venv
 
-# Файл с настройками
-config.json
+# Папка для тестирования развертнывания
+production/ 

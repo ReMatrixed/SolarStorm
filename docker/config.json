@@ -1,13 +1,14 @@
 {
+    "logger.log.filepath": "logs/solarstorm.log",
     "db.host": "postgres-db",
     "db.port": 5432,
-    "db.username": "POSTGRES_USERNAME_HERE",
-    "db.password": "POSTGRES_PASSWORD_HERE",
-    "db.name": "POSTGRES_DB_NAME_HERE",
+    "db.username": "POSTGRES_USERNAME",
+    "db.password": "POSTGRES_PASSWORD",
+    "db.name": "POSTGRES_DB_NAME",
 
     "redis.host": "redis-db",
     "redis.port": 6379,
-    "redis.password": "REDIS_PASSWORD_HERE",
+    "redis.password": "REDIS_PASSWORD",
 
-    "bot.api_key": "TELEGRAM_BOT_API_KEY_HERE"
+    "bot.api_key": "TELEGRAM_BOT_TOKEN"
 }

@@ -1,19 +1,25 @@
+networks:
+  solar-network:
+    name: solar-network
+
 services:
   postgres-db:
     image: postgres:alpine
     container_name: postgres-db
-    restart: unless-stopped
+    restart: always
+    networks:
+      - solar-network
     ports:
       - 5432:5432
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
     shm_size: 256MB
     environment:
-      POSTGRES_DB: POSTGRES_DB_NAME_HERE
-      POSTGRES_USER: POSTGRES_USERNAME_HERE
-      POSTGRES_PASSWORD: POSTGRESS_PASSWORD_HERE
+      POSTGRES_DB: POSTGRES_DB_NAME
+      POSTGRES_USER: POSTGRES_USERNAME
+      POSTGRES_PASSWORD: POSTGRES_PASSWORD
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U POSTGRES_USERNAME_HERE -d POSTGRES_DB_NAME_HERE"]
+      test: ["CMD-SHELL", "pg_isready -U POSTGRES_USERNAME -d POSTGRES_DB_NAME"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -27,19 +33,21 @@ services:
   postgres-admin:
     image: adminer
     container_name: postgres-admin
-    restart: unless-stopped
+    restart: always
+    networks:
+      - solar-network
     ports:
       - 9999:8080
-    networks:
-      - my-external-network
 
   redis-db:
     image: redis:alpine
     container_name: redis-db
-    restart: unless-stopped
+    restart: always
     command: ["redis-server", "/etc/redis/redis.conf"]
     volumes:
-      - ./config/redis.conf:/etc/redis/redis.conf
+      - ./redis.conf:/etc/redis/redis.conf
+    networks:
+      - solar-network
     ports:
       - 6379:6379
     deploy:
@@ -49,8 +57,11 @@ services:
           memory: 128M
 
   solarstorm-bot:
-    image: solarstorm:latest
+    build: ..
     container_name: solarstorm-bot
-    restart: unless-stopped
+    restart: always
+    networks:
+      - solar-network
     volumes:
-      - ./config.json:/config/config.json
+      - ./config.json:/app/config.json
+      - ./logs:/app/logs

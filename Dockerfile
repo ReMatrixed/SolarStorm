@@ -6,4 +6,4 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY src .
-CMD ["ls", "."] 
+CMD ["python", "main.py", "-c", "config.json"] 

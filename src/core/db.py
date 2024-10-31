@@ -200,6 +200,7 @@ class DatabaseDispatcher:
                 """
                 INSERT INTO tasks (chat_id, subject, question, priority, status, member)
                 VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
                 """,
                 (
                     task_data.user_chat_id, 

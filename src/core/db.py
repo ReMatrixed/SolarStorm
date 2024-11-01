@@ -71,19 +71,19 @@ class DatabaseDispatcher:
     # ВСЕ ДАННЫЕ ОБЯЗАТЕЛЬНЫ
     # 1-й столбец (id) - идентификационный номер, создается по умолчанию
     # 2-й столбец (chat_id) - Telegram ChatID участника
-    # 3-й столбец (subject) - предмет, на вопросы которого отвечает участник (MATHS, PHYSICS, INFORMATICS и т.д.)
+    # 3-й столбец (subject) - предмет, на вопросы которого отвечает участник: MATHS ("M"), PHYSICS ("P"), INFORMATICS ("I") и т.д.
     # 4-й столбец (answers) - кол-во успешных ответов на вопросы учеников
     # 5-й столбец (images) - кол-во изображений, отправленных участниками
     # 6-й столбец (videos) - кол-во видеоматериалов, отправленных участниками
-    # 7-й столбец (status) - статус участника (AVAILABLE - доступен, WORKING - работает над запросом, PAUSED - временно недоступен, FIRED - покинул чат-центр)
+    # 7-й столбец (status) - статус участника: A(vailable) - доступен, W(orking) - работает над запросом, P(aused) - временно недоступен, F(ired) - покинул чат-центр
 
     # Структура базы данных запросов
     # 1-й столбец (id) - идентификационный номер, создается по умолчанию
     # 2-й столбец (chat_id) - Telegram ChatID пользователя
-    # 3-й столбец (subject) - первая буква названия предмета, по которому задается вопрос (MATHS ("M"), PHYSICS ("P"), INFORMATICS ("I") и т.д.)
-    # 4-й столбец (question) - текст запроса (вопрос от Пользователя)
+    # 3-й столбец (subject) - первая буква названия предмета, по которому задается вопрос: MATHS ("M"), PHYSICS ("P"), INFORMATICS ("I") и т.д.
+    # 4-й столбец (question) - текст запроса (вопрос от пользователя)
     # 5-й столбец (priority) - приоритет запроса, вычисляется при его создании
-    # 6-й столбец (status) - статус запроса (APPROVED - выполняется, PENDING - ожидает принятия, CANCELED - отменен)
+    # 6-й столбец (executing) - статус запроса (выполняется или нет) - True или False
     # 7-й столбец (member) - chat_id участника, принявшего запрос
     async def prepare_database(self) -> None:
         async with self.connection.cursor() as cur: 
@@ -109,7 +109,7 @@ class DatabaseDispatcher:
                 CREATE TABLE IF NOT EXISTS members (
                     id SERIAL PRIMARY KEY,
                     chat_id BIGINT NOT NULL UNIQUE,
-                    subject TEXT NOT NULL,
+                    subjects TEXT[] NOT NULL,
                     answers INTEGER NOT NULL,
                     images INTEGER NOT NULL,
                     videos INTEGER NOT NULL,
@@ -127,7 +127,7 @@ class DatabaseDispatcher:
                     subject TEXT NOT NULL,
                     question TEXT NOT NULL,
                     priority SMALLINT NOT NULL,
-                    status TEXT NOT NULL,
+                    accepted BOOLEAN NOT NULL,
                     member BIGINT NOT NULL
                 )
                 """
@@ -246,6 +246,34 @@ class DatabaseDispatcher:
                 (chat_id,)
             )
             await self.connection.commit()
+
+    async def get_available_member(self, subject: str) -> UserData:
+        async with self.connection.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT * FROM users WHERE rating = (
+                    SELECT MAX(rating) FROM users WHERE chat_id IN (
+                        SELECT chat_id FROM members WHERE %s = ANY(subjects) 
+                        AND status = %s
+                    )
+                )
+                """,
+                (subject, "A")
+            )
+            available_data = await cur.fetchone()
+            if(available_data != None):
+                return UserData(
+                    chat_id = available_data[1],
+                    role = available_data[2],
+                    rating = available_data[3],
+                    realname = available_data[4],
+                    form = available_data[5],
+                    city = available_data[6]
+                )
+            else:
+                return UserData(
+                    is_available = False
+                )
         
     # Отключить базу данных    
     async def close_database(self) -> None:

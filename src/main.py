@@ -3,7 +3,6 @@ import argparse
 import logging
 import json
 import asyncio
-import os
 import re
 
 # Подключение внутренних модулей

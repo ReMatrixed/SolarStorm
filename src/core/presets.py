@@ -35,3 +35,12 @@ kb_subject_selection_buttons = [
     ]
 ]
 kb_subject_selection = types.InlineKeyboardMarkup(inline_keyboard = kb_subject_selection_buttons)
+
+# Пресет клавиатуры для ответ на вопрос о принятии ответа на запрос
+kb_user_permission_buttons = [
+    [
+        types.InlineKeyboardButton(text="Да ✅", callback_data="user_permission_allow"),
+        types.InlineKeyboardButton(text="Нет ❌", callback_data="user_permission_disalow")
+    ]
+]
+kb_user_permission = types.InlineKeyboardMarkup(inline_keyboard = kb_user_permission_buttons)

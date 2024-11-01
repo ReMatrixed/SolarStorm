@@ -35,8 +35,8 @@ class TaskData:
     is_available: bool = True
     user_chat_id: int = 0
     subject: str = "ERROR"
-    priority: int = 0
     question: str = "Ошибка запроса"
+    priority: int = 0
     accepted: bool = False
     member_chat_id: int = 0
 
@@ -272,6 +272,31 @@ class DatabaseDispatcher:
                 )
             else:
                 return UserData(
+                    is_available = False
+                )
+            
+    async def get_available_task(self, subject: str) -> TaskData:
+        async with self.connection.cursor() as cur:
+            await cur.execute(
+                """
+                SELECT * FROM tasks WHERE priority = (
+                    SELECT MAX(priority) FROM tasks WHERE subject = %s AND accepted = %s
+                )
+                """,
+                (subject, False)
+            )
+            available_data = await cur.fetchone()
+            if(available_data != None):
+                return TaskData(
+                    user_chat_id = available_data[1],
+                    subject = available_data[2],
+                    question = available_data[3],
+                    priority = available_data[4],
+                    accepted = available_data[5],
+                    member_chat_id = available_data[6]
+                )
+            else:
+                return TaskData(
                     is_available = False
                 )
         

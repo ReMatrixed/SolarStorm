@@ -211,7 +211,7 @@ async def request_subject_callback(callback: types.CallbackQuery, state: FSMCont
             subject = callback.data.replace("subject_", "").upper()[0],
             priority = 0,
             question = collected_task_data.get("question"),
-            status = "PENDING",
+            accepted = False,
             member_chat_id = 0
         )
     )
@@ -253,6 +253,6 @@ async def run_system():
     # Отключение от базы данных
     await db.close_database()
 
-# Проверка и запуск async-функции
+# Проверка и запуск основной async-функции
 if __name__ == "__main__":
     asyncio.run(run_system())

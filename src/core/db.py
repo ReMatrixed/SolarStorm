@@ -37,7 +37,7 @@ class TaskData:
     subject: str = "ERROR"
     priority: int = 0
     question: str = "Ошибка запроса"
-    status: str = "PENDING"
+    accepted: bool = False
     member_chat_id: int = 0
 
 # Основной класс управления БД
@@ -83,7 +83,7 @@ class DatabaseDispatcher:
     # 3-й столбец (subject) - первая буква названия предмета, по которому задается вопрос: MATHS ("M"), PHYSICS ("P"), INFORMATICS ("I") и т.д.
     # 4-й столбец (question) - текст запроса (вопрос от пользователя)
     # 5-й столбец (priority) - приоритет запроса, вычисляется при его создании
-    # 6-й столбец (executing) - статус запроса (выполняется или нет) - True или False
+    # 6-й столбец (accepted) - статус запроса (выполняется или нет) - True или False
     # 7-й столбец (member) - chat_id участника, принявшего запрос
     async def prepare_database(self) -> None:
         async with self.connection.cursor() as cur: 
@@ -198,7 +198,7 @@ class DatabaseDispatcher:
         async with self.connection.cursor() as cur:
             await cur.execute(
                 """
-                INSERT INTO tasks (chat_id, subject, question, priority, status, member)
+                INSERT INTO tasks (chat_id, subject, question, priority, accepted, member)
                 VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
                 """,
@@ -207,7 +207,7 @@ class DatabaseDispatcher:
                     task_data.subject, 
                     task_data.question, 
                     task_data.priority, 
-                    task_data.status, 
+                    task_data.accepted, 
                     task_data.member_chat_id
                 )
             )
